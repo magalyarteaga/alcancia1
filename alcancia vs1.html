@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cartilla de Ahorro Dinámica</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      margin: 0;
+      padding: 1rem;
+      color: #333;
+    }
+    .cartilla {
+      border: 2px solid #999;
+      border-radius: 10px;
+      padding: 1rem;
+      max-width: 650px;
+      margin: 1rem auto;
+      background-color: #fff;
+    }
+    .meta-display {
+      font-family: "Comic Sans MS", cursive, sans-serif;
+      font-weight: bold;
+      text-align: center;
+      font-size: 2rem;
+      margin: 1rem 0;
+    }
+    .controls {
+      max-width: 600px;
+      margin: auto;
+      margin-bottom: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    input[type="number"], input[type="text"], button {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    .checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .checkboxes label {
+      font-size: 0.9rem;
+    }
+    .grid-container {
+      overflow-x: auto;
+      margin: auto;
+      width: fit-content;
+    }
+    table {
+      border-collapse: collapse;
+      margin: auto;
+    }
+    th, td {
+      width: 60px;
+      height: 60px;
+      text-align: center;
+      vertical-align: middle;
+      border-radius: 6px;
+    }
+    th {
+      font-family: "Comic Sans MS", cursive, sans-serif;
+      font-weight: bold;
+      background-color: #cce5ff;
+    }
+    td.cell {
+      border: 2px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+    }
+    td.cell.saved {
+      background: #d9ead3;
+      border-color: #6aa84f;
+      font-weight: bold;
+      color: #38761d;
+    }
+    .summary {
+      text-align: center;
+      margin-top: 1rem;
+    }
+    .btn {
+      display: block;
+      margin: 1rem auto;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    @media print {
+      .controls, .btn, .summary {
+        display: none;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="controls">
+    <label>Escribe tu meta de ahorro:
+      <input type="text" id="meta" placeholder="Ej. Comprar una laptop" />
+    </label>
+
+    <label>Monto total a ahorrar:
+      <input type="number" id="goal" value="1000" min="1" />
+    </label>
+
+    <label>¿En cuántas casillas quieres dividir tu ahorro? (máximo 72):
+      <input type="number" id="numCasillas" value="72" min="1" max="72" />
+    </label>
+
+    <label>Selecciona los montos que quieres usar:</label>
+    <div class="checkboxes">
+      <label><input type="checkbox" class="monto" value="1" checked> 1</label>
+      <label><input type="checkbox" class="monto" value="2" checked> 2</label>
+      <label><input type="checkbox" class="monto" value="5" checked> 5</label>
+      <label><input type="checkbox" class="monto" value="10" checked> 10</label>
+      <label><input type="checkbox" class="monto" value="20" checked> 20</label>
+      <label><input type="checkbox" class="monto" value="50"> 50</label>
+      <label><input type="checkbox" class="monto" value="100"> 100</label>
+    </div>
+
+    <button onclick="generarCasillas()">Generar Casillas</button>
+    <button class="btn" onclick="window.print()">Guardar como PDF</button>
+  </div>
+
+  <div class="cartilla">
+    <div id="metaTexto" class="meta-display">Meta: </div>
+    <div class="grid-container">
+      <table id="grid"></table>
+    </div>
+  </div>
+
+  <div class="summary">
+    <h2>Total Ahorrado: <span id="ahorrado">0</span></h2>
+    <h2>Progreso: <span id="progreso">0%</span></h2>
+  </div>
+
+  <script>
+    let montos = [];
+    let marcados = [];
+
+    function generarCasillas() {
+      const grid = document.getElementById("grid");
+      grid.innerHTML = "";
+
+      const total = parseFloat(document.getElementById("goal").value);
+      const metaTexto = document.getElementById("meta").value;
+      const numCasillas = parseInt(document.getElementById("numCasillas").value);
+
+      if(numCasillas < 1 || numCasillas > 72){
+        alert("Por favor, ingresa un número de casillas entre 1 y 72.");
+        return;
+      }
+
+      if(total < 1){
+        alert("Por favor, ingresa un monto total mayor o igual a 1.");
+        return;
+      }
+
+      document.getElementById("metaTexto").innerText = "Meta: " + metaTexto;
+
+      const columnas = 9;
+      const filas = Math.ceil(numCasillas / columnas);
+
+      const seleccionados = Array.from(document.querySelectorAll(".monto:checked")).map(cb => parseInt(cb.value));
+      if (seleccionados.length === 0) {
+        alert("Selecciona al menos un monto para usar.");
+        return;
+      }
+
+      montos = distribuirMontos(total, numCasillas, seleccionados);
+      marcados = Array(numCasillas).fill(false);
+
+      const headerRow = document.createElement("tr");
+      const emptyTh = document.createElement("th");
+      headerRow.appendChild(emptyTh);
+      for (let c = 0; c < columnas; c++) {
+        const th = document.createElement("th");
+        th.innerText = String.fromCharCode(65 + c);
+        headerRow.appendChild(th);
+      }
+      grid.appendChild(headerRow);
+
+      for (let r = 0; r < filas; r++) {
+        const row = document.createElement("tr");
+        const th = document.createElement("th");
+        th.innerText = r + 1;
+        row.appendChild(th);
+
+        for (let c = 0; c < columnas; c++) {
+          const index = r * columnas + c;
+          const td = document.createElement("td");
+          if (index < numCasillas) {
+            td.className = "cell";
+            td.innerText = montos[index];
+            td.onclick = () => toggle(index, td);
+          } else {
+            td.innerText = "";
+          }
+          row.appendChild(td);
+        }
+        grid.appendChild(row);
+      }
+
+      actualizarResumen();
+    }
+
+    function distribuirMontos(total, cantidad, valoresPosibles) {
+      let montos = [];
+      let suma = 0;
+
+      while (montos.length < cantidad) {
+        let restante = total - suma;
+        let minValor = Math.min(...valoresPosibles);
+        let posibles = valoresPosibles.filter(v => v <= restante && (restante - v) >= (cantidad - montos.length - 1) * minValor);
+
+        if (montos.length === cantidad - 1) {
+          if (valoresPosibles.includes(restante)) {
+            montos.push(restante);
+            suma += restante;
+          }
+          break;
+        }
+        if (posibles.length === 0) break;
+
+        let val = posibles[Math.floor(Math.random() * posibles.length)];
+        montos.push(val);
+        suma += val;
+      }
+
+      if (montos.length !== cantidad || suma !== total) {
+        return distribuirMontos(total, cantidad, valoresPosibles);
+      }
+
+      return montos.sort(() => Math.random() - 0.5);
+    }
+
+    function toggle(index, td) {
+      if (marcados[index]) {
+        const confirmar = confirm("¿Desea desmarcar la cantidad?");
+        if (!confirmar) return;
+      }
+      marcados[index] = !marcados[index];
+      td.classList.toggle("saved");
+      actualizarResumen();
+    }
+
+    function actualizarResumen() {
+      const total = montos.reduce((acc, val, i) => acc + (marcados[i] ? val : 0), 0);
+      const objetivo = parseFloat(document.getElementById("goal").value);
+      document.getElementById("ahorrado").innerText = total;
+      document.getElementById("progreso").innerText = Math.round(100 * total / objetivo) + "%";
+    }
+  </script>
+</body>
+</html>
